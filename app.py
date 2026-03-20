@@ -295,6 +295,32 @@ def api_buses(id_parada: str):
         return jsonify({"error": str(exc), "stop_id": id_parada}), 500
 
 
+@app.get("/api/stops")
+def api_stops():
+    stops = load_stops_index()
+    results: List[Dict[str, object]] = []
+
+    for stop in stops.values():
+        stop_id = _normalize_stop_id(str(stop.get("stop_id", "")))
+        stop_name = str(stop.get("stop_name", "")).strip()
+        stop_lat = stop.get("stop_lat")
+        stop_lon = stop.get("stop_lon")
+
+        if not stop_id or stop_lat is None or stop_lon is None:
+            continue
+
+        results.append(
+            {
+                "stop_id": stop_id,
+                "stop_name": stop_name,
+                "stop_lat": stop_lat,
+                "stop_lon": stop_lon,
+            }
+        )
+
+    return jsonify(results)
+
+
 @app.get("/api/stops/<id_parada>")
 def api_stop_detail(id_parada: str):
     id_parada = id_parada.strip()
