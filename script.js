@@ -1,15 +1,22 @@
 const API_BASE_URL = window.API_BASE_URL || "";
 const AUTO_REFRESH_MS = 30_000;
+const THEME_STORAGE_KEY = "amb-bus-theme";
+const MAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const STOP_PIN_SIZE = 22;
 const STOP_PIN_HTML =
   '<span class="stop-pin-pulse" aria-hidden="true"></span><span class="stop-pin-core" aria-hidden="true"></span>';
 
 const map = L.map("map").setView([41.3888, 2.159], 12);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+const positron = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 20,
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-}).addTo(map);
+  attribution: MAP_ATTRIBUTION,
+});
+const darkMatter = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  maxZoom: 20,
+  attribution: MAP_ATTRIBUTION,
+});
+let currentBaseLayer = null;
 
 function createStopIcon(isActive = false) {
   return L.divIcon({
@@ -39,6 +46,7 @@ const elements = {
   input: document.getElementById("stop-id-input"),
   searchButton: document.getElementById("search-button"),
   refreshButton: document.getElementById("refresh-button"),
+  modeToggle: document.getElementById("mode-toggle"),
   refreshInfo: document.getElementById("refresh-info"),
   statusBanner: document.getElementById("status-banner"),
   resultsPanel: document.getElementById("results-panel"),
@@ -108,6 +116,50 @@ function findStopMarker(stopId) {
 function getKnownStopMeta(stopId) {
   const marker = findStopMarker(stopId);
   return marker?.options?.stopData || null;
+}
+
+function getInitialThemeIsDark() {
+  try {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === "dark") {
+      return true;
+    }
+    if (storedTheme === "light") {
+      return false;
+    }
+  } catch (error) {
+    // Ignora errores de lectura en localStorage.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
+}
+
+function setMapModeToggleState(isDark) {
+  if (!elements.modeToggle) {
+    return;
+  }
+  const nextLabel = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
+  elements.modeToggle.classList.toggle("is-dark", isDark);
+  elements.modeToggle.setAttribute("aria-pressed", String(isDark));
+  elements.modeToggle.setAttribute("aria-label", nextLabel);
+  elements.modeToggle.title = nextLabel;
+}
+
+function toggleMapMode(isDark) {
+  const nextBaseLayer = isDark ? darkMatter : positron;
+  if (currentBaseLayer && map.hasLayer(currentBaseLayer)) {
+    map.removeLayer(currentBaseLayer);
+  }
+  currentBaseLayer = nextBaseLayer;
+  currentBaseLayer.addTo(map);
+
+  document.body.classList.toggle("dark-mode", isDark);
+  setMapModeToggleState(isDark);
+
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, isDark ? "dark" : "light");
+  } catch (error) {
+    // Ignora errores de escritura en localStorage.
+  }
 }
 
 function setActiveMarker(marker) {
@@ -388,5 +440,11 @@ elements.refreshButton.addEventListener("click", () => {
   loadStopData(lastStopId, false, lastStopMeta);
 });
 
+elements.modeToggle?.addEventListener("click", () => {
+  const isDark = document.body.classList.contains("dark-mode");
+  toggleMapMode(!isDark);
+});
+
+toggleMapMode(getInitialThemeIsDark());
 loadStopsOnMap();
 startAutoRefresh();
