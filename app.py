@@ -1,7 +1,11 @@
 import csv
 import datetime
+import io
+import logging
 import math
 import os
+import time
+import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -15,10 +19,21 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 DEFAULT_AMB_GTFS_RT_URL = "https://www.ambmobilitat.cat/transit/trips-updates/trips.bin"
+DEFAULT_AMB_GTFS_STATIC_ZIP_URL = (
+    "https://www.ambmobilitat.cat/OpenData/google_transit.zip"
+)
+STOPS_CACHE_MAX_AGE_SECONDS = 24 * 60 * 60
 AMB_GTFS_RT_URL = os.getenv("AMB_GTFS_RT_URL", DEFAULT_AMB_GTFS_RT_URL).strip()
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "15"))
-GTFS_STOPS_FILE = Path(os.getenv("GTFS_STOPS_FILE", "stops.txt"))
+AMB_GTFS_STATIC_ZIP_URL = os.getenv(
+    "AMB_GTFS_STATIC_ZIP_URL", DEFAULT_AMB_GTFS_STATIC_ZIP_URL
+).strip()
+GTFS_STOPS_FILE = Path(os.getenv("GTFS_STOPS_FILE", str(Path(__file__).resolve().parent / "stops.txt")))
 
 
 MAPA_LINEAS = {
@@ -31,6 +46,72 @@ MAPA_LINEAS = {
 _stops_cache: Optional[Dict[str, Dict[str, object]]] = None
 _stops_cache_mtime: Optional[float] = None
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _env_is_true(var_name: str) -> bool:
+    return os.getenv(var_name, "").strip().lower() == "true"
+
+
+def ensure_stops_file() -> None:
+    global _stops_cache, _stops_cache_mtime
+    force_refresh = _env_is_true("FORCE_GTFS_REFRESH")
+    stops_exists = GTFS_STOPS_FILE.exists()
+
+    if stops_exists and not force_refresh:
+        age_seconds = time.time() - GTFS_STOPS_FILE.stat().st_mtime
+        if age_seconds < STOPS_CACHE_MAX_AGE_SECONDS:
+            logger.info(
+                "Usando stops.txt local (edad %.1f horas, cache max 24h).",
+                age_seconds / 3600,
+            )
+            return
+
+    try:
+        if force_refresh:
+            logger.info("FORCE_GTFS_REFRESH=true, forzando actualizacion de stops.txt.")
+        elif stops_exists:
+            logger.info("stops.txt tiene mas de 24h, actualizando desde GTFS estatico.")
+        else:
+            logger.info("stops.txt no existe, descargando GTFS estatico.")
+
+        response = requests.get(
+            AMB_GTFS_STATIC_ZIP_URL, timeout=REQUEST_TIMEOUT_SECONDS
+        )
+        response.raise_for_status()
+
+        zip_buffer = io.BytesIO(response.content)
+        with zipfile.ZipFile(zip_buffer) as zf:
+            stops_member = next(
+                (name for name in zf.namelist() if name.lower().endswith("stops.txt")),
+                None,
+            )
+            if not stops_member:
+                raise FileNotFoundError("El ZIP no contiene stops.txt")
+
+            stops_data = zf.read(stops_member)
+
+        GTFS_STOPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with GTFS_STOPS_FILE.open("wb") as fp:
+            fp.write(stops_data)
+
+        _stops_cache = None
+        _stops_cache_mtime = None
+
+        logger.info(
+            "stops.txt actualizado correctamente en %s.", GTFS_STOPS_FILE.resolve()
+        )
+    except Exception as exc:
+        if stops_exists and GTFS_STOPS_FILE.exists():
+            logger.error(
+                "Error actualizando stops.txt. Se mantiene el archivo local antiguo. Error: %s",
+                exc,
+            )
+            return
+
+        logger.warning(
+            "No se pudo descargar/extraer stops.txt (%s). La app arrancara sin pines en el mapa.",
+            exc,
+        )
 
 
 def _parse_stops_file() -> Dict[str, Dict[str, object]]:
@@ -199,6 +280,10 @@ def web_style():
 @app.get("/script.js")
 def web_script():
     return send_from_directory(BASE_DIR, "script.js")
+
+
+with app.app_context():
+    ensure_stops_file()
 
 
 if __name__ == "__main__":

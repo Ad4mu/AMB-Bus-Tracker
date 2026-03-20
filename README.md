@@ -72,6 +72,9 @@ Servidor por defecto:
 - `GTFS_STOPS_FILE` (opcional, default `stops.txt`)
 - Ruta al GTFS estatico para coordenadas y nombre de parada.
 
+- `FORCE_GTFS_REFRESH` (opcional, default `false`)
+- Si vale `true`, fuerza la descarga de `google_transit.zip` y reemplaza `stops.txt` en cada arranque.
+
 ## Endpoints API
 
 - `GET /api/health`
@@ -116,6 +119,16 @@ Campos usados:
 - `stop_name`
 - `stop_lat`
 - `stop_lon`
+
+## Actualizacion automatica de `stops.txt` en arranque
+
+En el inicio del worker (incluyendo Gunicorn en Render), la app intenta asegurar `stops.txt` con esta logica:
+- Si `stops.txt` existe y tiene menos de 24 horas: reutiliza cache local.
+- Si tiene mas de 24 horas: descarga `https://www.ambmobilitat.cat/OpenData/google_transit.zip` y extrae solo `stops.txt`.
+- Si `FORCE_GTFS_REFRESH=true`: fuerza descarga sin mirar antiguedad.
+- Si falla la descarga/extraccion:
+- Si habia `stops.txt` previo: mantiene el archivo antiguo.
+- Si no habia archivo: arranca igualmente, pero sin pines en mapa.
 
 ## Despliegue en Render
 
