@@ -1,11 +1,28 @@
 const API_BASE_URL = window.API_BASE_URL || "";
 const AUTO_REFRESH_MS = 30_000;
+const STOP_PIN_SIZE = 22;
+const STOP_PIN_HTML =
+  '<span class="stop-pin-pulse" aria-hidden="true"></span><span class="stop-pin-core" aria-hidden="true"></span>';
 
 const map = L.map("map").setView([41.3888, 2.159], 12);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap contributors",
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+  maxZoom: 20,
+  attribution:
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 }).addTo(map);
+
+function createStopIcon(isActive = false) {
+  return L.divIcon({
+    className: `stop-pin${isActive ? " is-active" : ""}`,
+    html: STOP_PIN_HTML,
+    iconSize: [STOP_PIN_SIZE, STOP_PIN_SIZE],
+    iconAnchor: [STOP_PIN_SIZE / 2, STOP_PIN_SIZE / 2],
+    popupAnchor: [0, -STOP_PIN_SIZE / 2],
+  });
+}
+
+const defaultStopIcon = createStopIcon(false);
+const activeStopIcon = createStopIcon(true);
 
 const stopsCluster = L.markerClusterGroup({
   chunkedLoading: true,
@@ -30,6 +47,7 @@ const elements = {
 let lastStopId = "";
 let lastStopMeta = null;
 let stopMarker = null;
+let activeMapMarker = null;
 let autoRefreshTimer = null;
 let refreshTickTimer = null;
 let nextRefreshAt = null;
@@ -90,6 +108,16 @@ function findStopMarker(stopId) {
 function getKnownStopMeta(stopId) {
   const marker = findStopMarker(stopId);
   return marker?.options?.stopData || null;
+}
+
+function setActiveMarker(marker) {
+  if (activeMapMarker && activeMapMarker !== marker && activeMapMarker !== stopMarker) {
+    activeMapMarker.setIcon(defaultStopIcon);
+  }
+  if (marker) {
+    marker.setIcon(activeStopIcon);
+  }
+  activeMapMarker = marker;
 }
 
 function escapeHtml(value) {
@@ -166,6 +194,7 @@ async function loadStopsOnMap() {
       const marker = L.marker([stop.stop_lat, stop.stop_lon], {
         title: `${stop.stop_name || "Parada"} (${stop.stop_id})`,
         stopData: stop,
+        icon: defaultStopIcon,
       });
 
       marker.bindPopup(
@@ -175,6 +204,7 @@ async function loadStopsOnMap() {
       );
 
       marker.on("click", () => {
+        setActiveMarker(marker);
         const selectedId = stop.stop_id;
         elements.input.value = selectedId;
         setStatus(
@@ -231,6 +261,7 @@ function paintStopMarker(stop) {
       stopMarker = null;
     }
 
+    setActiveMarker(existingMarker);
     map.flyTo([stop.stop_lat, stop.stop_lon], 16, { duration: 0.8 });
     stopsCluster.zoomToShowLayer(existingMarker, () => {
       existingMarker.openPopup();
@@ -242,7 +273,9 @@ function paintStopMarker(stop) {
     stopMarker.remove();
   }
 
-  stopMarker = L.marker([stop.stop_lat, stop.stop_lon]).addTo(map);
+  setActiveMarker(null);
+  stopMarker = L.marker([stop.stop_lat, stop.stop_lon], { icon: activeStopIcon }).addTo(map);
+  activeMapMarker = stopMarker;
   stopMarker.bindPopup(`<b>${stop.stop_name || "Parada"}</b><br>ID: ${stop.stop_id}`);
   stopMarker.openPopup();
   map.flyTo([stop.stop_lat, stop.stop_lon], 16, { duration: 0.8 });

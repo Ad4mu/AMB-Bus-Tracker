@@ -7,6 +7,9 @@
   --text-soft: #506a77;
   --accent: #0e9f75;
   --accent-strong: #0a7d5c;
+  --map-accent: #1795ff;
+  --map-accent-strong: #0f72d4;
+  --map-accent-soft: rgba(23, 149, 255, 0.28);
   --warn: #de6b35;
   --danger: #ba2d0b;
   --shadow: 0 12px 35px rgba(11, 33, 44, 0.16);
@@ -21,7 +24,7 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  font-family: "Outfit", sans-serif;
+  font-family: "Inter", "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
   color: var(--text-main);
   background: radial-gradient(circle at top left, var(--bg-1), var(--bg-2));
 }
@@ -102,8 +105,9 @@ body {
 
 h1 {
   margin: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Inter", "Roboto", "Segoe UI", system-ui, -apple-system, sans-serif;
   font-size: 1.6rem;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -125,7 +129,7 @@ input[type="text"] {
   border-radius: 12px;
   padding: 0.78rem 0.88rem;
   font-size: 1rem;
-  font-family: "Outfit", sans-serif;
+  font-family: inherit;
   color: var(--text-main);
   background: rgba(255, 255, 255, 0.7);
 }
@@ -140,7 +144,7 @@ button {
   border-radius: 12px;
   padding: 0.74rem 1rem;
   font-size: 0.95rem;
-  font-family: "Outfit", sans-serif;
+  font-family: inherit;
   font-weight: 700;
   cursor: pointer;
   background: var(--accent);
@@ -253,6 +257,104 @@ button.secondary:hover {
   width: 100%;
   height: calc(100vh - 32px);
   border-radius: 22px;
+}
+
+.stop-pin {
+  position: relative;
+  border: none;
+  background: transparent;
+}
+
+.stop-pin-core,
+.stop-pin-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+
+.stop-pin-core {
+  inset: 3px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  background: var(--map-accent);
+  box-shadow: 0 7px 16px rgba(15, 76, 145, 0.32);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.stop-pin-pulse {
+  background: var(--map-accent-soft);
+  transform: scale(0.75);
+  opacity: 0;
+}
+
+.stop-pin:hover .stop-pin-core,
+.stop-pin.is-active .stop-pin-core {
+  transform: scale(1.18);
+  background: var(--map-accent-strong);
+  box-shadow: 0 10px 22px rgba(15, 76, 145, 0.45);
+}
+
+.stop-pin:hover .stop-pin-pulse,
+.stop-pin.is-active .stop-pin-pulse {
+  animation: pinPulse 1.5s ease-out infinite;
+  opacity: 1;
+}
+
+@keyframes pinPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.52;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.marker-cluster {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 10px 28px rgba(9, 55, 106, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background: rgba(23, 149, 255, 0.22);
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background: linear-gradient(
+    145deg,
+    rgba(23, 149, 255, 0.97),
+    rgba(15, 114, 212, 0.94)
+  );
+  color: #fff;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.64);
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.leaflet-popup-content-wrapper {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-family: inherit;
+  color: #1f3342;
+}
+
+.leaflet-popup-tip {
+  border: none;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 @media (max-width: 980px) {
