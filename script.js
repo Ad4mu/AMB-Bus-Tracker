@@ -126,6 +126,7 @@ async function loadStopData(stopId, silent = false) {
     return;
   }
 
+  const stopMetaPromise = fetchStopMeta(stopId);
   setLoading(true);
   if (!silent) {
     setStatus(`Consultando parada ${stopId}...`);
@@ -148,9 +149,11 @@ async function loadStopData(stopId, silent = false) {
     lastStopId = stopId;
     nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
 
-    const stopMeta = await fetchStopMeta(stopId);
+    const stopMeta = await stopMetaPromise;
     paintStopMarker(stopMeta);
   } catch (error) {
+    const stopMeta = await stopMetaPromise;
+    paintStopMarker(stopMeta);
     setStatus(error.message, true);
     if (!silent) {
       renderEmpty("No se pudo obtener informacion de llegadas.");

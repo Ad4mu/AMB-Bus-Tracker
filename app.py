@@ -48,6 +48,57 @@ _stops_cache_mtime: Optional[float] = None
 BASE_DIR = Path(__file__).resolve().parent
 
 
+def _normalize_stop_id(raw_value: str) -> str:
+    value = (raw_value or "").strip()
+    if ":" in value:
+        value = value.split(":")[-1].strip()
+    return value
+
+
+def _numeric_stop_id(raw_value: str) -> str:
+    normalized = _normalize_stop_id(raw_value)
+    digits = "".join(ch for ch in normalized if ch.isdigit())
+    if not digits:
+        return ""
+    return digits.lstrip("0") or "0"
+
+
+def _stop_ids_match(left: str, right: str) -> bool:
+    left_norm = _normalize_stop_id(left)
+    right_norm = _normalize_stop_id(right)
+    if left_norm == right_norm:
+        return True
+
+    left_num = _numeric_stop_id(left_norm)
+    right_num = _numeric_stop_id(right_norm)
+    return bool(left_num and right_num and left_num == right_num)
+
+
+def _find_stop_by_id(stops: Dict[str, Dict[str, object]], stop_id: str) -> Optional[Dict[str, object]]:
+    requested = _normalize_stop_id(stop_id)
+    if requested in stops:
+        return stops[requested]
+
+    requested_num = _numeric_stop_id(requested)
+    if not requested_num:
+        return None
+
+    for candidate in (
+        requested_num,
+        requested_num.zfill(6),
+        requested_num.zfill(5),
+        requested_num.zfill(4),
+    ):
+        if candidate in stops:
+            return stops[candidate]
+
+    for key, stop in stops.items():
+        if _numeric_stop_id(key) == requested_num:
+            return stop
+
+    return None
+
+
 def _env_is_true(var_name: str) -> bool:
     return os.getenv(var_name, "").strip().lower() == "true"
 
@@ -181,6 +232,7 @@ def _build_estado(minutos_faltan: int) -> str:
 
 def consultar_parada(id_parada_buscada: str) -> List[Dict[str, object]]:
     feed = fetch_gtfs_feed()
+    id_parada_buscada = _normalize_stop_id(id_parada_buscada)
     ahora_unix = datetime.datetime.now(datetime.timezone.utc).timestamp()
     resultados: List[Dict[str, object]] = []
 
@@ -194,7 +246,7 @@ def consultar_parada(id_parada_buscada: str) -> List[Dict[str, object]]:
         nombre_linea = MAPA_LINEAS.get(prefijo, f"Linea {prefijo}")
 
         for stop_time in trip_update.stop_time_update:
-            if stop_time.stop_id != id_parada_buscada:
+            if not _stop_ids_match(stop_time.stop_id, id_parada_buscada):
                 continue
 
             llegada_unix = None
@@ -247,7 +299,7 @@ def api_buses(id_parada: str):
 def api_stop_detail(id_parada: str):
     id_parada = id_parada.strip()
     stops = load_stops_index()
-    stop = stops.get(id_parada)
+    stop = _find_stop_by_id(stops, id_parada)
     if not stop:
         return (
             jsonify(
